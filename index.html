@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Router NordVPN management</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<style>
+body {
+        padding: 16px 8px;
+        font-size: 16px;
+        color: #222222;
+        font-family: sans-serif;
+}
+.flex {
+        display: flex;
+        flex-flow: column nowrap;
+        justify-content: flex-start;
+        align-items: flex-start;
+
+}
+.flex > * {
+        flex: 1;
+}
+button {
+        border-style: solid;
+        border-width: 1px;
+}
+select, input[type="text"], button {
+        cursor: pointer;
+        padding: 12px !important;
+        border-radius: 1px !important;
+        margin-bottom: 8px;
+        font-size: 16px;
+        color: #222222;
+}
+button.deactivate {
+        background-color: #d07f7f;
+}
+button.activate {
+        background-color: #95c493;
+}
+</style>
+</head>
+
+<body>
+<h1>Router NordVPN management</h1>
+
+<div id="status"></div>
+<div class="flex">
+        <h2>Activate NordVPN</h2>
+        <input type="text" id="prefixSearch" placeholder="Search by prefix...">
+        <select name="server" id="serverSelect"></select>
+        <button class="activate" id="activateBtn">Activate</button>
+</div>
+<div class="flex">
+        <h2>Deactivate NordVPN</h2>
+        <button class="deactivate" id="deactivateBtn">Deactivate</button>
+</div>
+
+<script>
+const GET_SERVER_LIST_URL = "servers.json"
+const POST_VPN_STATE_URL = ""
+
+let serverList = []
+
+function updateServerListOptions(list) {
+        const select = document.querySelector("#serverSelect")
+        select.innerHTML = ""
+        list
+                .slice(0, 100)
+                .forEach(({ name, hostname, station }) => {
+                        const option = document.createElement("option")
+                        option.setAttribute("value", `${hostname}__${station}`)
+                        option.innerText = name
+                        select.appendChild(option)
+                })
+}
+
+function showStatus(text) {
+        document.querySelector("#status").innerText = text
+}
+
+async function filterServerListOptions() {
+        const searchInput = document.querySelector("#prefixSearch")
+        const search = searchInput.value
+        const filteredServerList = serverList.filter(({ name }) => name.startsWith(search))
+        updateServerListOptions(filteredServerList)
+}
+
+async function getServerList() {
+        showStatus("Fetching NordVPN server list...")
+        try {
+                const resp = await fetch(GET_SERVER_LIST_URL)
+                if (!resp.ok) throw new Error(`${GET_SERVER_LIST_URL} responded with HTTP ${resp.status}`)
+                serverList = await resp.json()
+                filterServerListOptions()
+                showStatus("")
+        } catch (err) {
+                console.error(err)
+                showStatus(err.message)
+        }
+}
+
+getServerList()
+
+document.querySelector("#prefixSearch").addEventListener("input", filterServerListOptions)
+
+document.querySelector("#deactivateBtn").addEventListener("click", async function() {
+        showStatus("Disabling NordVPN...")
+        try {
+                const body = JSON.stringify({
+                        action: "disable",
+                })
+                const resp = await fetch(POST_VPN_STATE_URL, { method: "POST", body })
+                if (!resp.ok) throw new Error(`${POST_VPN_STATE_URL} responded with HTTP ${resp.status}`)
+                showStatus(await resp.text())
+        } catch (err) {
+                console.error(err)
+                showStatus(err.message)
+        }
+})
+
+document.querySelector("#activateBtn").addEventListener("click", async function() {
+        const selectedVal = document.querySelector("#serverSelect").value
+        if (!selectedVal) {
+                document.querySelector("#result").innerHtml = "Select a server first!"
+                return
+        }
+        showStatus("Enabling NordVPN...")
+        try {
+                const [domain, ip] = selectedVal.split("__")
+                const body = JSON.stringify({
+                        action: "enable",
+                        domain,
+                        ip,
+                })
+                const resp = await fetch(POST_VPN_STATE_URL, { method: "POST", body })
+                if (!resp.ok) throw new Error(`${POST_VPN_STATE_URL} responded with HTTP ${resp.status}`)
+                showStatus(await resp.text())
+        } catch (err) {
+                console.error(err)
+                showStatus(err.message)
+        }
+})
+</script>
+</body>
